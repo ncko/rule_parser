@@ -8,9 +8,58 @@ primary     -> RULE | "(" expression ")"
 from pprint import pprint
 from enum import Enum
 
-example1 = "foo and bar or baz";
-example2 = "(foo and bar) or baz";
-example3 = "foo and (bar or baz)";
+
+
+
+
+
+def foo():
+    return True
+
+def bar():
+    return False
+
+def baz():
+    return True
+
+def true():
+    return True
+
+def false():
+    return False
+
+
+
+def requires_login():
+    return True
+
+def requires_no_base_credentials():
+    return True
+
+def requires_subscription():
+    return False
+
+
+rules = {
+    "foo": foo,
+    "bar": bar,
+    "baz": baz,
+    "true": true,
+    "false": false,
+    "requires_login": requires_login,
+    "requires_no_base_credentials": requires_no_base_credentials,
+    "requires_subscription": requires_subscription
+}
+
+
+
+
+
+
+
+
+
+
 
 TokenType = Enum("TokenType", [
     "OR",
@@ -90,16 +139,32 @@ class Binary(Expr):
         self.left = left
         self.operator = operator
         self.right = right
+
+    def interpret(self):
+        if self.operator.type == TokenType.AND:
+            return self.left.interpret() and self.right.interpret()
+        else:
+            return self.left.interpret() or self.right.interpret()
         
 
 class Literal(Expr):
     def __init__(self, literal):
         self.literal = literal
 
+    def interpret(self):
+        rule = self.lookup()
+        return rule()
+
+    def lookup(self):
+        return rules.get(self.literal.literal)
+
 
 class Grouping(Expr):
     def __init__(self, expression):
         self.expression = expression
+
+    def interpret(self):
+        return self.expression.interpret()
 
 
 class Parser:
@@ -109,9 +174,11 @@ class Parser:
 
     def parse(self):
         try:
-            return self.expression()
+            result = self.expression()
+            return (True, result)
         except ParseError:
-            return None
+            curr = self.previous() if self.isAtEnd() else self.peek()
+            return (False, curr)
 
     def expression(self):
         return self.logical_or()
@@ -150,7 +217,9 @@ class Parser:
     def consume(self, type, message):
         if self.check(type):
             return self.advance()
-        raise self.error(peek(), message)
+
+        curr = self.previous() if self.isAtEnd() else self.peek()
+        raise self.error(curr, message)
 
     def error(self, token, message):
         printError(token, message)
@@ -178,6 +247,8 @@ class Parser:
 
         return self.peek().type == type
 
+    def previous(self):
+        return self.tokens[self.current - 1]
 
     def peek(self):
         return self.tokens[self.current]
@@ -187,7 +258,15 @@ class Parser:
 
 
 if __name__ == "__main__":
-    scanner = Scanner(example2)
+    script = """false or (true and true)"""
+    scanner = Scanner(script)
     tokens = scanner.scan()
     parser = Parser(tokens)
-    expression = parser.parse()
+    isSuccessful, parsed = parser.parse()
+
+    if isSuccessful:
+        result = parsed.interpret()
+        print(result)
+    else:
+        print('`' + script + '`')
+        print(' ' * (parsed.column + 1) + '^')
